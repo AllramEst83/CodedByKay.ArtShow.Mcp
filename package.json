@@ -1,0 +1,27 @@
+{
+  "name": "codedbykay.artshow.mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Read-only MCP server exposing the CodedByKay.ArtShow.CLI SQLite catalog (artwork.db) to MCP clients.",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "artshow-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "dev": "tsc -p tsconfig.json --watch"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}
