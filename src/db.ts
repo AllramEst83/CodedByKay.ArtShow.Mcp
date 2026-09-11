@@ -11,10 +11,13 @@ if (!existsSync(DB_PATH)) {
   );
 }
 
-// Read-only: this server never writes. CodedByKay.ArtShow.CLI is the sole writer of the catalog
-// (see ArtShow.Workspace/AGENTS.md). The db runs in WAL mode alongside the CLI; a read-only
-// connection can safely read committed data while the CLI has it open.
-export const db = new DatabaseSync(DB_PATH, { readOnly: true });
+// Read-write: CodedByKay.ArtShow.CLI (EF Core / Microsoft.Data.Sqlite) is usually the only writer,
+// but this server can now mutate the catalog too (see mutations.ts) so agents can manage it without
+// the interactive TUI. The db runs in WAL mode, which allows one writer + many readers across
+// processes via SQLite's normal file locking; busy_timeout below makes a write here wait out a
+// momentary lock from the CLI instead of failing immediately with SQLITE_BUSY.
+export const db = new DatabaseSync(DB_PATH);
+db.exec("PRAGMA busy_timeout = 5000;");
 
 export function parseStringList(raw: string): string[] {
   try {
@@ -23,4 +26,8 @@ export function parseStringList(raw: string): string[] {
   } catch {
     return [];
   }
+}
+
+export function todayIsoDate(): string {
+  return new Date().toISOString().slice(0, 10);
 }

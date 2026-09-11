@@ -7,7 +7,7 @@ import type { ArtworkDto, ArtworkRow, ClassifierRow, PublishStateRow } from "./t
 // ArtShow.Workspace/AGENTS.md "Key decisions".
 const R2_PUBLIC_BASE_URL = (process.env.ARTSHOW_R2_PUBLIC_BASE_URL ?? "https://kaysartshow.fyi").replace(/\/+$/, "");
 
-function toDto(row: ArtworkRow): ArtworkDto {
+export function toDto(row: ArtworkRow): ArtworkDto {
   const isVideo = row.Type === "video";
   return {
     id: row.Id,
