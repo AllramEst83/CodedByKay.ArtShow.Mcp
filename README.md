@@ -68,6 +68,15 @@ same sources the CLI does (see "Configuration" below), so if `dotnet run` in
   uploads new R2 objects, updates the row, verifies, then removes the old
   R2 objects. The one workflow the CLI has no direct answer for short of
   delete-and-re-add.
+- `relocate_artwork_media` — batch-move an image row's R2 objects to their
+  canonical `originals/<year>/<slug>.webp` / `thumbs/<year>/<slug>-600w.webp`
+  path (year from `CreatedDate`, falling back to `AddedDate`) via a
+  server-side R2 copy — no download, no re-encoding, bytes untouched. For
+  when `CreatedDate` was corrected after upload and left the object under
+  the wrong year folder. A row already at its canonical keys is left alone
+  and reported `unchanged`; a manual copy done ahead of time (new key
+  already present, old key already gone) is tolerated and still updates the
+  row. Every id succeeds or fails independently.
 
 ### Classifiers
 - `list_classifiers` — the vocabulary (Category/Medium/Tag/Group), each with

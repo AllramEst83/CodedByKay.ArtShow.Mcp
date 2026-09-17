@@ -20,7 +20,7 @@ import {
 import { withSavepoint } from "../db/connection.js";
 import { createThumbnail, encodeOriginalAsWebp } from "../media/imaging.js";
 import { KeyAllocator } from "../media/keys.js";
-import { deleteObjects, headPublicUrl, uploadObject } from "../storage/r2.js";
+import { copyObject, deleteObjects, headPublicUrl, objectExists, uploadObject } from "../storage/r2.js";
 import { checkMissingClassifiers, resolveClassifiers, type ClassifierMode, type OnMissingClassifiers } from "./classify.js";
 import { guarded } from "./wrap.js";
 
@@ -488,6 +488,99 @@ export function registerArtworkTools(server: McpServer, ctx: ServerContext): voi
       }
 
       return jsonResult({ artwork: dto, oldKeysRemoved, oldKeys, urlVerification, sourceDeleted });
+    }),
+  );
+
+  server.registerTool(
+    "relocate_artwork_media",
+    {
+      title: "Relocate an artwork's R2 objects to its canonical path (batch)",
+      description:
+        "Recomputes an image artwork's canonical R2 keys (originals/<year>/<slug>.webp, same layout add_artworks " +
+        "uses — year from CreatedDate, falling back to AddedDate) and moves its objects there via a server-side " +
+        "R2 copy — no re-encoding, no local download, bytes untouched. For when CreatedDate was fixed after " +
+        "upload and left the object under the wrong year folder. Verifies both new public URLs are live before " +
+        "updating the row and deleting the old objects; a row already at its canonical keys is left untouched " +
+        "and reported 'unchanged'. Tolerates a manual copy done ahead of time (new key already present, old key " +
+        "already gone) — still updates the row and reports 'moved'. Every id succeeds or fails independently.",
+      inputSchema: {
+        ids: z.array(z.number().int()).min(1),
+      },
+      annotations: writeHint,
+    },
+    guarded(async ({ ids }) => {
+      const client = ctx.getR2Client();
+      const bucket = ctx.config.r2.bucket;
+
+      const results = await Promise.all(
+        ids.map(async (id) => {
+          try {
+            const existing = fetchArtworkRow(ctx.db, id);
+            if (!existing) return { id, status: "error" as const, error: `Artwork ${id} not found.` };
+            if (existing.Type === "video") return { id, status: "error" as const, error: `Artwork ${id} is a video row — nothing to relocate.` };
+            if (!existing.R2Key || !existing.ThumbR2Key) {
+              return { id, status: "error" as const, error: `Artwork ${id} has no R2Key/ThumbR2Key set — use replace_artwork_image instead.` };
+            }
+
+            const year = yearOf(existing.CreatedDate ?? existing.AddedDate);
+            const reserved = allReferencedR2Keys(ctx.db);
+            reserved.delete(existing.R2Key);
+            reserved.delete(existing.ThumbR2Key);
+            const keys = new KeyAllocator(reserved).allocate(existing.Title, year);
+
+            if (keys.originalKey === existing.R2Key && keys.thumbKey === existing.ThumbR2Key) {
+              return { id, status: "unchanged" as const, r2Key: existing.R2Key, thumbR2Key: existing.ThumbR2Key };
+            }
+
+            const pairs: { oldKey: string; newKey: string }[] = [
+              { oldKey: existing.R2Key, newKey: keys.originalKey },
+              { oldKey: existing.ThumbR2Key, newKey: keys.thumbKey },
+            ];
+
+            for (const { oldKey, newKey } of pairs) {
+              if (oldKey === newKey) continue;
+              const newExists = await objectExists(client, bucket, newKey);
+              if (!newExists) {
+                const oldExists = await objectExists(client, bucket, oldKey);
+                if (!oldExists) {
+                  return { id, status: "error" as const, error: `Neither old key (${oldKey}) nor new key (${newKey}) exist in the bucket.` };
+                }
+                await copyObject(client, bucket, oldKey, newKey);
+              }
+            }
+
+            const [imgCheck, thumbCheck] = await Promise.all([
+              headPublicUrl(`${ctx.config.r2.publicBaseUrl}/${keys.originalKey}`),
+              headPublicUrl(`${ctx.config.r2.publicBaseUrl}/${keys.thumbKey}`),
+            ]);
+            const urlVerification = { imageOk: imgCheck.ok, thumbOk: thumbCheck.ok };
+            if (!imgCheck.ok || !thumbCheck.ok) {
+              return { id, status: "error" as const, error: `New URLs did not verify live: ${JSON.stringify(urlVerification)} — old objects left in place.` };
+            }
+
+            const row = updateArtworkRow(ctx.db, id, { r2Key: keys.originalKey, thumbR2Key: keys.thumbKey })!;
+
+            const oldKeysStillPresent = (
+              await Promise.all(pairs.filter((p) => p.oldKey !== p.newKey).map(async (p) => ((await objectExists(client, bucket, p.oldKey)) ? p.oldKey : null)))
+            ).filter((k): k is string => k !== null);
+            if (oldKeysStillPresent.length > 0) await deleteObjects(client, bucket, oldKeysStillPresent);
+
+            return {
+              id,
+              status: "moved" as const,
+              oldKeys: { r2Key: existing.R2Key, thumbR2Key: existing.ThumbR2Key },
+              newKeys: { r2Key: row.R2Key, thumbR2Key: row.ThumbR2Key },
+              oldKeysRemoved: oldKeysStillPresent,
+              urlVerification,
+            };
+          } catch (err) {
+            const message = err instanceof ToolError ? err.message : (err as Error).message;
+            return { id, status: "error" as const, error: message };
+          }
+        }),
+      );
+
+      return jsonResult({ moved: results.filter((r) => r.status === "moved").length, results });
     }),
   );
 }
