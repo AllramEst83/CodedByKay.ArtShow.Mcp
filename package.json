@@ -1,8 +1,8 @@
 {
   "name": "codedbykay.artshow.mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "Read-only MCP server exposing the CodedByKay.ArtShow.CLI SQLite catalog (artwork.db) to MCP clients.",
+  "description": "MCP server exposing the full CodedByKay.ArtShow.CLI workflow (catalog, R2 media, YouTube ids, classifiers, publish) to MCP clients.",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -11,13 +11,16 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
-    "dev": "tsc -p tsconfig.json --watch"
+    "dev": "tsc -p tsconfig.json --watch",
+    "test": "npm run build && node --test dist/test/"
   },
   "engines": {
     "node": ">=22.5.0"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1134.0",
     "@modelcontextprotocol/sdk": "^1.30.0",
+    "sharp": "^0.35.4",
     "zod": "^3.24.1"
   },
   "devDependencies": {

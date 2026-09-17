@@ -44,7 +44,25 @@ export interface ClassifierRow {
   Name: string;
 }
 
+export type ClassifierKind = "Category" | "Medium" | "Tag" | "Group";
+
+export interface ClassifierWithUsage {
+  id: number;
+  kind: ClassifierKind;
+  name: string;
+  usageCount: number;
+  exampleTitles: string[];
+}
+
 export interface PublishStateRow {
   Id: number;
   Dirty: number;
+}
+
+export interface FuzzyMatch {
+  candidate: string;
+  bestMatch: string | null;
+  kind: ClassifierKind | null;
+  exact: boolean;
+  distance: number | null;
 }
