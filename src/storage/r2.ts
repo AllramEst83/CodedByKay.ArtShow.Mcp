@@ -1,4 +1,5 @@
 import {
+  CopyObjectCommand,
   DeleteObjectsCommand,
   HeadObjectCommand,
   ListObjectsV2Command,
@@ -35,6 +36,13 @@ export async function uploadObject(
   contentType: string,
 ): Promise<void> {
   await client.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: body, ContentType: contentType }));
+}
+
+/** Server-side copy (no download/re-upload) — used to fix up a key's path without touching bytes. */
+export async function copyObject(client: S3Client, bucket: string, sourceKey: string, destKey: string): Promise<void> {
+  await client.send(
+    new CopyObjectCommand({ Bucket: bucket, CopySource: `${bucket}/${encodeURIComponent(sourceKey)}`, Key: destKey }),
+  );
 }
 
 export async function deleteObjects(client: S3Client, bucket: string, keys: string[]): Promise<void> {

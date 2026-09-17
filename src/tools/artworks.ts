@@ -351,19 +351,19 @@ export function registerArtworkTools(server: McpServer, ctx: ServerContext): voi
     },
     guarded(({ items, classifierMode }) => {
       const results = items.map((item) => {
-        const { id, ...patch } = item;
+        const { id, category, medium, tags, groups, ...rest } = item;
         try {
           const resolved = resolveClassifiers(
             ctx.db,
-            { category: patch.category ?? undefined, medium: patch.medium ?? undefined, tags: patch.tags, groups: patch.groups },
+            { category: category ?? undefined, medium: medium ?? undefined, tags, groups },
             classifierMode,
           );
           const row = updateArtworkRow(ctx.db, id, {
-            ...patch,
-            category: patch.category === null ? null : (resolved.category ?? undefined),
-            medium: patch.medium === null ? null : (resolved.medium ?? undefined),
-            tags: resolved.tags,
-            groups: resolved.groups,
+            ...rest,
+            ...(category !== undefined && { category: category === null ? null : (resolved.category ?? undefined) }),
+            ...(medium !== undefined && { medium: medium === null ? null : (resolved.medium ?? undefined) }),
+            ...(tags !== undefined && { tags: resolved.tags }),
+            ...(groups !== undefined && { groups: resolved.groups }),
           });
           if (!row) return { id, status: "error" as const, error: `Artwork ${id} not found.` };
           return {
